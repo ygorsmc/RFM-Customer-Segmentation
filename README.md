@@ -47,3 +47,42 @@ The project followed a structured workflow to ensure the quality of the analysis
 * **Frontend and Deployment:** HTML5, CSS3, PyScript
 
 ## 📁 Project Structure
+
+```
+/
+|-- rfm_cluster_model.joblib  # Saved K-Means model and Scaler
+|-- ecommerce.db              # Database with sales data
+|-- index.html                # Interactive web application
+|-- cluster_analysis.ipynb    # Notebook with all analysis and modeling
+|-- README.md                 # This file
+```
+
+## ⚙️ Running Locally
+
+To test the application on your machine:
+
+1.  **Clone the repository:**
+    ```bash
+    git clone [https://github.com/YOUR-USERNAME/YOUR-REPOSITORY-NAME.git](https://github.com/YOUR-USERNAME/YOUR-REPOSITORY-NAME.git)
+    ```
+2.  **Navigate to the project folder:**
+    ```bash
+    cd YOUR-REPOSITORY-NAME
+    ```
+3.  **Start a local server:**
+    Since PyScript needs to fetch the `.joblib` and `.db` files, a local server is required. With Python installed, use:
+    ```bash
+    python -m http.server
+    ```
+4.  **Access in your browser:**
+    Open your browser and go to `http://localhost:8000`.
+
+## 🔗 Author
+
+* **Ygor Carvalho**
+* **LinkedIn:** [linkedin.com/in/ygorsmc](https://linkedin.com/in/ygorsmc/)
+* **GitHub:** [github.com/ygorsmc](https://github.com/ygorsmc)
+
+## 📄 License
+
+Distributed under the MIT License.

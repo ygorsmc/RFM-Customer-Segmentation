@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Segmentação de Clientes (RFM)</title>
+  <title>Customer Segmentation (RFM)</title>
 
   <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
   <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
@@ -18,35 +18,45 @@
     button { background-color: #007bff; color: white; font-size: 1em; cursor: pointer; }
     button:hover { background-color: #0056b3; }
     #output-div { margin-top: 1.5em; padding: 1em; text-align: center; font-size: 1.2em; font-weight: bold; border-radius: 4px; }
+
+    /* Hides the default PyScript error box */
+    .py-error {
+      display: none !important;
+    }
   </style>
 </head>
 <body>
 
   <div class="container">
-    <h1>🛍️ Segmentação de Clientes com RFM</h1>
-    <p>Insira os dados de Recência, Frequência e Valor Monetário para descobrir a qual segmento o cliente pertence.</p>
+    <h1>🛍️ Customer Segmentation with RFM</h1>
+    <p>Enter the Recency, Frequency, and Monetary data to find out which segment the customer belongs to.</p>
 
     <div class="form-grid">
       <div>
-        <label for="recency">Recência (R): (dias desde a última compra)</label>
+        <label for="recency">Recency (R): (days since last purchase)</label>
         <input type="number" id="recency" value="30">
       </div>
       <div>
-        <label for="frequency">Frequência (F): (nº total de compras)</label>
+        <label for="frequency">Frequency (F): (total number of purchases)</label>
         <input type="number" id="frequency" value="5">
       </div>
       <div>
-        <label for="monetary">Monetário (M): (valor total gasto)</label>
+        <label for="monetary">Monetary (M): (total amount spent)</label>
         <input type="number" id="monetary" step="0.01" value="850.50">
       </div>
-      <button id="predict-button" type="button" py-click="segment_customer">Segmentar Cliente</button>
+      <button id="predict-button" type="button" py-click="segment_customer">Segment Customer</button>
     </div>
 
-    <div id="output-div">O segmento do cliente aparecerá aqui.</div>
+    <div id="output-div">The customer segment will appear here.</div>
   </div>
 
   <py-config>
-    packages = ["pandas", "scikit-learn", "joblib"]
+    packages = [
+    "pandas",
+    "scikit-learn",
+    "numpy",
+    "joblib"
+    ]
   </py-config>
 
   <py-script>
@@ -56,69 +66,80 @@
     from js import document, console
     import io
 
-    # Variáveis globais para armazenar o scaler e o modelo
+    # Global variables to store the scaler and model
     scaler = None
     model = None
 
     async def load_model_and_scaler():
-        """Carrega o scaler e o modelo .joblib de forma assíncrona."""
+        """Asynchronously loads the scaler and .joblib model file."""
         global scaler, model
         if scaler is None or model is None:
-            console.log("Carregando o scaler e o modelo...")
+            console.log("Loading the scaler and model...")
             try:
                 response = await pyfetch('./rfm_cluster_model.joblib')
                 if response.ok:
                     model_bytes = await response.bytes()
-                    # O joblib.load retorna a tupla que salvamos: (scaler, kmeans_model)
+                    # joblib.load returns the tuple we saved: (scaler, kmeans_model)
                     scaler, model = joblib.load(io.BytesIO(model_bytes))
-                    console.log("Scaler e modelo carregados com sucesso!")
+                    console.log("Scaler and model loaded successfully!")
                 else:
-                    console.error(f"Erro ao buscar o arquivo: {response.status}")
+                    console.error(f"Error fetching the file: {response.status}")
             except Exception as e:
-                console.error(f"Ocorreu um erro ao carregar o arquivo: {e}")
+                console.error(f"An error occurred while loading the file: {e}")
 
     async def segment_customer(*args, **kwargs):
-        """Função chamada pelo botão para segmentar o cliente."""
+        """Function called by the button to segment the customer (final corrected version)."""
         await load_model_and_scaler()
+        output_div = document.getElementById('output-div')
+
         if scaler is None or model is None:
-            output_div = document.getElementById('output-div')
-            output_div.innerText = "Erro: Modelo não pôde ser carregado."
+            output_div.innerText = "Error: Model could not be loaded."
             return
 
-        console.log("Coletando dados do formulário...")
+        try:
+            recency_val = document.getElementById('recency').value
+            frequency_val = document.getElementById('frequency').value
+            monetary_val = document.getElementById('monetary').value
 
-        # Coleta os dados do formulário HTML
-        recency = int(document.getElementById('recency').value)
-        frequency = int(document.getElementById('frequency').value)
-        monetary = float(document.getElementById('monetary').value)
+            if not recency_val or not frequency_val or not monetary_val:
+                raise ValueError("Fields cannot be empty.")
 
-        # Cria um DataFrame do Pandas com os dados do usuário
-        input_df = pd.DataFrame([[recency, frequency, monetary]], columns=['Recency', 'Frequency', 'Monetary'])
+            recency = int(recency_val)
+            frequency = int(frequency_val)
+            monetary = float(monetary_val)
 
-        # ETAPA 1: Aplica o escalonamento (StandardScaler) nos dados de entrada.
-        # Esta etapa é CRUCIAL e deve usar o MESMO scaler que foi treinado.
-        scaled_input = scaler.transform(input_df)
-        console.log(f"Dados escalonados: {scaled_input}")
+            # Creates the input DataFrame with the correct column names
+            input_df = pd.DataFrame([[recency, frequency, monetary]], columns=['Recency', 'Frequency', 'Monetary'])
 
-        # ETAPA 2: Usa o modelo K-Means para prever o cluster
-        cluster = model.predict(scaled_input)[0]
-        console.log(f"Cluster previsto: {cluster}")
+            # STEP 1: Apply scaling
+            scaled_input_array = scaler.transform(input_df) # This returns a NumPy Array
 
-        # Mapeia o número do cluster para uma descrição amigável
-        # Estes nomes devem ser baseados na sua análise dos clusters no notebook!
-        cluster_map = {
-            # Exemplo (ajuste com base na sua análise):
-            0: "Clientes em Risco (Compraram há muito tempo)",
-            1: "Melhores Clientes (Campeões)",
-            2: "Clientes Fiéis (Potencial de crescimento)",
-            3: "Novos Clientes (Baixo valor, mas recentes)"
-        }
+            # --- CORRECTED/ADDED LINE ---
+            # Convert the array back to a DataFrame with column names
+            scaled_input_df = pd.DataFrame(scaled_input_array, columns=input_df.columns)
 
-        segment_name = cluster_map.get(cluster, "Segmento Desconhecido")
+            # STEP 2: Use the model to predict the cluster from the scaled DataFrame
+            # --- CHANGED LINE ---
+            cluster = model.predict(scaled_input_df)[0]
 
-        # Mostra o resultado na tela
-        output_div = document.getElementById('output-div')
-        output_div.innerText = f"Segmento: {segment_name}"
+            # Map the cluster number to a user-friendly description
+            cluster_map = {
+                0: "At-Risk Customers (Purchased a long time ago)",
+                1: "Best Customers (Champions)",
+                2: "Loyal Customers (Potential for growth)",
+                3: "New Customers (Low value, but recent)"
+            }
+
+            segment_name = cluster_map.get(cluster, "Unknown Segment")
+
+            # Display the result on the screen
+            output_div.innerText = f"Segment: {segment_name}"
+
+        except ValueError as e:
+            output_div.innerText = "Error: Please fill all fields with valid numbers."
+        except Exception as e:
+            console.error(f"An unexpected error occurred: {e}")
+            output_div.innerText = "An unexpected error occurred. Check the console (F12)."
 
   </py-script>
 </body>

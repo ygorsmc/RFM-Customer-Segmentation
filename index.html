@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Segmentação de Clientes (RFM)</title>
+
+  <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+  <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+
+  <style>
+    body { font-family: sans-serif; background-color: #f4f4f9; color: #333; margin: 0; padding: 2em; display: flex; justify-content: center; }
+    .container { max-width: 600px; background: white; padding: 2em; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    h1 { text-align: center; color: #0056b3; }
+    .form-grid { display: grid; grid-template-columns: 1fr; gap: 1.2em; }
+    label { font-weight: bold; }
+    input, button { padding: 0.8em; border-radius: 4px; border: 1px solid #ccc; width: 100%; box-sizing: border-box; }
+    button { background-color: #007bff; color: white; font-size: 1em; cursor: pointer; }
+    button:hover { background-color: #0056b3; }
+    #output-div { margin-top: 1.5em; padding: 1em; text-align: center; font-size: 1.2em; font-weight: bold; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>🛍️ Segmentação de Clientes com RFM</h1>
+    <p>Insira os dados de Recência, Frequência e Valor Monetário para descobrir a qual segmento o cliente pertence.</p>
+
+    <div class="form-grid">
+      <div>
+        <label for="recency">Recência (R): (dias desde a última compra)</label>
+        <input type="number" id="recency" value="30">
+      </div>
+      <div>
+        <label for="frequency">Frequência (F): (nº total de compras)</label>
+        <input type="number" id="frequency" value="5">
+      </div>
+      <div>
+        <label for="monetary">Monetário (M): (valor total gasto)</label>
+        <input type="number" id="monetary" step="0.01" value="850.50">
+      </div>
+      <button id="predict-button" type="button" py-click="segment_customer">Segmentar Cliente</button>
+    </div>
+
+    <div id="output-div">O segmento do cliente aparecerá aqui.</div>
+  </div>
+
+  <py-config>
+    packages = ["pandas", "scikit-learn", "joblib"]
+  </py-config>
+
+  <py-script>
+    import pandas as pd
+    import joblib
+    from pyodide.http import pyfetch
+    from js import document, console
+    import io
+
+    # Variáveis globais para armazenar o scaler e o modelo
+    scaler = None
+    model = None
+
+    async def load_model_and_scaler():
+        """Carrega o scaler e o modelo .joblib de forma assíncrona."""
+        global scaler, model
+        if scaler is None or model is None:
+            console.log("Carregando o scaler e o modelo...")
+            try:
+                response = await pyfetch('./rfm_cluster_model.joblib')
+                if response.ok:
+                    model_bytes = await response.bytes()
+                    # O joblib.load retorna a tupla que salvamos: (scaler, kmeans_model)
+                    scaler, model = joblib.load(io.BytesIO(model_bytes))
+                    console.log("Scaler e modelo carregados com sucesso!")
+                else:
+                    console.error(f"Erro ao buscar o arquivo: {response.status}")
+            except Exception as e:
+                console.error(f"Ocorreu um erro ao carregar o arquivo: {e}")
+
+    async def segment_customer(*args, **kwargs):
+        """Função chamada pelo botão para segmentar o cliente."""
+        await load_model_and_scaler()
+        if scaler is None or model is None:
+            output_div = document.getElementById('output-div')
+            output_div.innerText = "Erro: Modelo não pôde ser carregado."
+            return
+
+        console.log("Coletando dados do formulário...")
+
+        # Coleta os dados do formulário HTML
+        recency = int(document.getElementById('recency').value)
+        frequency = int(document.getElementById('frequency').value)
+        monetary = float(document.getElementById('monetary').value)
+
+        # Cria um DataFrame do Pandas com os dados do usuário
+        input_df = pd.DataFrame([[recency, frequency, monetary]], columns=['Recency', 'Frequency', 'Monetary'])
+
+        # ETAPA 1: Aplica o escalonamento (StandardScaler) nos dados de entrada.
+        # Esta etapa é CRUCIAL e deve usar o MESMO scaler que foi treinado.
+        scaled_input = scaler.transform(input_df)
+        console.log(f"Dados escalonados: {scaled_input}")
+
+        # ETAPA 2: Usa o modelo K-Means para prever o cluster
+        cluster = model.predict(scaled_input)[0]
+        console.log(f"Cluster previsto: {cluster}")
+
+        # Mapeia o número do cluster para uma descrição amigável
+        # Estes nomes devem ser baseados na sua análise dos clusters no notebook!
+        cluster_map = {
+            # Exemplo (ajuste com base na sua análise):
+            0: "Clientes em Risco (Compraram há muito tempo)",
+            1: "Melhores Clientes (Campeões)",
+            2: "Clientes Fiéis (Potencial de crescimento)",
+            3: "Novos Clientes (Baixo valor, mas recentes)"
+        }
+
+        segment_name = cluster_map.get(cluster, "Segmento Desconhecido")
+
+        # Mostra o resultado na tela
+        output_div = document.getElementById('output-div')
+        output_div.innerText = f"Segmento: {segment_name}"
+
+  </py-script>
+</body>
+</html>
